@@ -356,7 +356,6 @@
 
         <div class="mb-3">
           <label class="form-label-custom">Tanggal</label>
-          <!-- Tanggal dibatasi max="hari ini" secara otomatis di Javascript -->
           <input type="date" class="form-control input-box" id="date" required>
         </div>
 
@@ -381,7 +380,29 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
   <script>
+    // 1. Masukkan URL Deploy Web App Apps Script di sini (Bukan URL Google Sheets)
+    const API_URL = "https://script.google.com/macros/s/AKfycbxYOUR_DEPLOYMENT_ID_HERE/exec"; 
+
+    // Helper untuk memanggil API backend Apps Script via HTTP POST
+    async function callAPI(action, payload = {}) {
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: action, ...payload })
+        });
+        const result = await response.json();
+        if (!result.ok) {
+          throw new Error(result.message || "Terjadi kesalahan pada server.");
+        }
+        return result.data;
+      } catch (err) {
+        throw err;
+      }
+    }
+
     let sessionToken = "";
     let activeMember = "";
     let rawTransactions = [];
@@ -394,7 +415,6 @@
     const monthShortNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
     const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
-    // Mengambil string tanggal hari ini (Format YYYY-MM-DD lokal)
     function getTodayLocalDate() {
       const today = new Date();
       return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -417,7 +437,7 @@
     }
 
     // Login
-    function handleLogin(e) {
+    async function handleLogin(e) {
       e.preventDefault();
       const userVal = document.getElementById('loginUsername').value;
       const passVal = document.getElementById('loginPassword').value;
@@ -431,50 +451,82 @@
       text.innerText = 'Memeriksa...';
       spinner.classList.remove('d-none');
 
-      google.script.run
-        .withSuccessHandler(function(res) {
-          btn.disabled = false;
-          text.innerText = 'Masuk';
-          spinner.classList.add('d-none');
+      try {
+        // Pemanggilan via Apps Script Environment / Web App Fetch
+        let res;
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function(response) {
+              processLoginResult(response, btn, text, spinner, alertBox);
+            })
+            .withFailureHandler(function(err) {
+              btn.disabled = false;
+              text.innerText = 'Masuk';
+              spinner.classList.add('d-none');
+              alertBox.innerText = 'Terjadi kesalahan sistem: ' + err.message;
+              alertBox.classList.remove('d-none');
+            })
+            .login(userVal, passVal);
+        } else {
+          res = await callAPI('login', { username: userVal, password: passVal });
+          processLoginResult({ ok: true, ...res }, btn, text, spinner, alertBox);
+        }
+      } catch (err) {
+        btn.disabled = false;
+        text.innerText = 'Masuk';
+        spinner.classList.add('d-none');
+        alertBox.innerText = 'Terjadi kesalahan sistem: ' + err.message;
+        alertBox.classList.remove('d-none');
+      }
+    }
 
-          if (res && res.ok) {
-            sessionToken = res.token;
-            activeMember = res.member;
-            document.getElementById('loggedInLabel').innerText = res.label;
-            
-            document.getElementById('loginView').classList.add('d-none');
-            document.getElementById('dashboardView').classList.remove('d-none');
-            document.getElementById('formLogin').reset();
-            
-            loadDashboardData();
-          } else {
-            alertBox.innerText = (res && res.message) ? res.message : 'Username atau sandi salah.';
-            alertBox.classList.remove('d-none');
-          }
-        })
-        .withFailureHandler(function(err) {
-          btn.disabled = false;
-          text.innerText = 'Masuk';
-          spinner.classList.add('d-none');
-          alertBox.innerText = 'Terjadi kesalahan sistem: ' + err.message;
-          alertBox.classList.remove('d-none');
-        })
-        .login(userVal, passVal);
+    function processLoginResult(res, btn, text, spinner, alertBox) {
+      btn.disabled = false;
+      text.innerText = 'Masuk';
+      spinner.classList.add('d-none');
+
+      if (res && res.ok) {
+        sessionToken = res.token;
+        activeMember = res.member;
+        document.getElementById('loggedInLabel').innerText = res.label || res.member;
+        
+        document.getElementById('loginView').classList.add('d-none');
+        document.getElementById('dashboardView').classList.remove('d-none');
+        document.getElementById('formLogin').reset();
+        
+        loadDashboardData();
+      } else {
+        alertBox.innerText = (res && res.message) ? res.message : 'Username atau sandi salah.';
+        alertBox.classList.remove('d-none');
+      }
     }
 
     // Load Data
-    function loadDashboardData() {
-      google.script.run
-        .withSuccessHandler(function(data) {
-          if (data) {
-            rawTransactions = data.transactions || [];
-            rawCategories = data.categories || [];
-            populateCategoryFilter(rawCategories);
-            renderCategories(rawCategories);
-            renderDashboard();
-          }
-        })
-        .getData(sessionToken);
+    async function loadDashboardData() {
+      try {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function(data) {
+              handleDashboardData(data);
+            })
+            .getData(sessionToken);
+        } else {
+          const data = await callAPI('getData', { token: sessionToken });
+          handleDashboardData(data);
+        }
+      } catch (err) {
+        showToast('Gagal memuat data: ' + err.message);
+      }
+    }
+
+    function handleDashboardData(data) {
+      if (data) {
+        rawTransactions = data.transactions || [];
+        rawCategories = data.categories || [];
+        populateCategoryFilter(rawCategories);
+        renderCategories(rawCategories);
+        renderDashboard();
+      }
     }
 
     function populateCategoryFilter(categories) {
@@ -620,7 +672,6 @@
           const mName = tx.member ? tx.member.charAt(0).toUpperCase() + tx.member.slice(1) : '';
           const dateTimeDisplay = formatTxDateTime(tx.date, tx.time);
           
-          // PROTEKSI TOMBOL HAPUS: Hanya tombol sampah tampil jika transaksi dibuat oleh user yang sedang login
           const isOwner = String(tx.member).toLowerCase() === String(activeMember).toLowerCase();
           const deleteBtnHtml = isOwner 
             ? `<button class="btn-delete-tx" title="Hapus Pengeluaran" onclick="openDeleteModal('${tx.id}')">
@@ -700,22 +751,32 @@
       modal.show();
     }
 
-    document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
       if (!selectedTxToDelete) return;
       
       const modalEl = document.getElementById('deleteModal');
       const modal = bootstrap.Modal.getInstance(modalEl);
       if (modal) modal.hide();
 
-      google.script.run
-        .withSuccessHandler(function(res) {
+      try {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function(res) {
+              showToast(res.message || 'Pengeluaran berhasil dihapus.');
+              loadDashboardData();
+            })
+            .withFailureHandler(function(err) {
+              showToast('Gagal: ' + err.message);
+            })
+            .deleteTransaction(sessionToken, selectedTxToDelete);
+        } else {
+          const res = await callAPI('deleteTransaction', { token: sessionToken, id: selectedTxToDelete });
           showToast(res.message || 'Pengeluaran berhasil dihapus.');
           loadDashboardData();
-        })
-        .withFailureHandler(function(err) {
-          showToast('Gagal: ' + err.message);
-        })
-        .deleteTransaction(sessionToken, selectedTxToDelete);
+        }
+      } catch (err) {
+        showToast('Gagal: ' + err.message);
+      }
     });
 
     function filterMember(el, member) {
@@ -755,7 +816,6 @@
       const today = getTodayLocalDate();
       const dateInput = document.getElementById('date');
       
-      // PEMBATASAN TANGGAL: Mengunci tanggal maksimal ke hari ini
       dateInput.max = today;
       dateInput.value = today;
       
@@ -767,7 +827,7 @@
       resetForm();
     }
 
-    function handleTransactionSubmit(e) {
+    async function handleTransactionSubmit(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSimpan');
       const text = document.getElementById('btnText');
@@ -785,27 +845,45 @@
         note: document.getElementById('note').value
       };
 
-      google.script.run
-        .withSuccessHandler(function(id) {
+      try {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function(id) {
+              btn.disabled = false;
+              text.innerText = 'Simpan';
+              spinner.classList.add('d-none');
+
+              if (id) {
+                showToast('Transaksi berhasil disimpan!');
+                resetForm();
+                loadDashboardData();
+              } else {
+                alert('Gagal menyimpan transaksi.');
+              }
+            })
+            .withFailureHandler(function(err) {
+              btn.disabled = false;
+              text.innerText = 'Simpan';
+              spinner.classList.add('d-none');
+              alert('Error: ' + err.message);
+            })
+            .addTransaction(sessionToken, txPayload);
+        } else {
+          const res = await callAPI('addTransaction', { token: sessionToken, transaction: txPayload });
           btn.disabled = false;
           text.innerText = 'Simpan';
           spinner.classList.add('d-none');
 
-          if (id) {
-            showToast('Transaksi berhasil disimpan!');
-            resetForm();
-            loadDashboardData();
-          } else {
-            alert('Gagal menyimpan transaksi.');
-          }
-        })
-        .withFailureHandler(function(err) {
-          btn.disabled = false;
-          text.innerText = 'Simpan';
-          spinner.classList.add('d-none');
-          alert('Error: ' + err.message);
-        })
-        .addTransaction(sessionToken, txPayload);
+          showToast('Transaksi berhasil disimpan!');
+          resetForm();
+          loadDashboardData();
+        }
+      } catch (err) {
+        btn.disabled = false;
+        text.innerText = 'Simpan';
+        spinner.classList.add('d-none');
+        alert('Error: ' + err.message);
+      }
     }
 
     function resetForm() {
@@ -829,11 +907,16 @@
     }
 
     function handleLogout() {
-      if (sessionToken) google.script.run.logout(sessionToken);
+      if (sessionToken) {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.logout(sessionToken);
+        } else {
+          callAPI('logout', { token: sessionToken }).catch(() => {});
+        }
+      }
       sessionToken = "";
-      document.getElementById('dashboardView').classList.remove('d-none');
-      document.getElementById('loginView').classList.remove('d-none');
       document.getElementById('dashboardView').classList.add('d-none');
+      document.getElementById('loginView').classList.remove('d-none');
     }
   </script>
 </body>
