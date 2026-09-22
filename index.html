@@ -254,13 +254,11 @@
   <div id="loginView" class="container mt-5" style="max-width: 380px;">
     <div class="card p-4 border-0 shadow-sm" style="border-radius: 20px; background: #fff;">
       <h3 class="text-center fw-bold mb-4" style="color: var(--primary-color); font-family: serif;">Buku Kas Keluarga</h3>
-      
-      <div id="loginAlert" class="alert alert-danger p-2 small d-none text-center mb-3" role="alert"></div>
 
       <form id="formLogin" onsubmit="handleLogin(event)">
         <div class="mb-3">
           <label class="form-label-custom">Pengguna</label>
-          <select class="form-select input-box" id="loginUsername" required>
+          <select class="form-select input-box" id="username" required>
             <option value="" disabled selected>-- Pilih Pengguna --</option>
             <option value="arta">Arta</option>
             <option value="ayu">Ayu</option>
@@ -268,9 +266,9 @@
         </div>
         <div class="mb-4">
           <label class="form-label-custom">Sandi</label>
-          <input type="password" class="input-box" id="loginPassword" placeholder="Masukkan Sandi" required>
+          <input type="password" class="input-box" id="password" placeholder="Masukkan Sandi" required>
         </div>
-        <button type="submit" class="btn-submit" id="btnLogin">
+        <button type="submit" class="btn-submit" id="loginBtn">
           <span id="btnLoginText">Masuk</span>
           <span id="btnLoginSpinner" class="spinner-border spinner-border-sm d-none ms-1" role="status"></span>
         </button>
@@ -380,61 +378,81 @@
     </div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
   <script>
     // URL Web App Apps Script
-    const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LiV7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LIv7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
 
-// Memanggil API Apps Script via JSONP (Bypass CORS & Responsif)
-function callAPI(action, payload = {}) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-    const script = document.createElement('script');
+    // Call API via JSONP
+    function callAPI(action, payload = {}) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const script = document.createElement('script');
 
-    // Timeout 15 detik jika jaringan lambat
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error("Koneksi RTO/Lambat. Periksa koneksi internet Anda."));
-    }, 15000);
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error("Koneksi RTO/Lambat. Periksa koneksi internet Anda."));
+        }, 15000);
 
-    function cleanup() {
-      clearTimeout(timeout);
-      if (script.parentNode) script.parentNode.removeChild(script);
-      delete window[callbackName];
+        function cleanup() {
+          clearTimeout(timeout);
+          if (script.parentNode) script.parentNode.removeChild(script);
+          delete window[callbackName];
+        }
+
+        window[callbackName] = function(response) {
+          cleanup();
+          if (response && response.ok) {
+            resolve(response);
+          } else {
+            reject(new Error(response ? response.message : "Gagal memproses permintaan."));
+          }
+        };
+
+        const requestData = encodeURIComponent(JSON.stringify({ action: action, ...payload }));
+        script.src = `${API_URL}?callback=${callbackName}&requestData=${requestData}`;
+        
+        script.onerror = function() {
+          cleanup();
+          reject(new Error("Gagal terhubung ke Google Apps Script. Silakan coba lagi."));
+        };
+
+        document.body.appendChild(script);
+      });
     }
 
-    window[callbackName] = function(response) {
-      cleanup();
-      if (response && response.ok) {
-        resolve(response);
-      } else {
-        reject(new Error(response ? response.message : "Gagal memproses permintaan."));
-      }
-    };
-
-    const requestData = encodeURIComponent(JSON.stringify({ action: action, ...payload }));
-    script.src = `${API_URL}?callback=${callbackName}&requestData=${requestData}`;
-    
-    script.onerror = function() {
-      cleanup();
-      reject(new Error("Gagal terhubung ke Google Apps Script. Silakan coba lagi."));
-    };
-
-    document.body.appendChild(script);
-  });
-}
     let sessionToken = "";
     let activeMember = "";
     let rawTransactions = [];
     let rawCategories = [];
     let currentMemberFilter = "semua";
-    let currentDate = new Date(2026, 8, 1);
+    let currentDate = new Date();
     let chartInstance = null;
     let selectedTxToDelete = null;
 
     const monthShortNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
     const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+    // Inisialisasi Aplikasi Saat Halaman Dibuka
+    document.addEventListener("DOMContentLoaded", function() {
+      // Set label bulan saat ini
+      document.getElementById('currentMonthLabel').innerText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+
+      // Cek apakah ada sesi login tersimpan
+      const savedToken = localStorage.getItem("sessionToken");
+      const savedMember = localStorage.getItem("userMember");
+      const savedLabel = localStorage.getItem("userLabel");
+
+      if (savedToken && savedMember) {
+        sessionToken = savedToken;
+        activeMember = savedMember;
+        document.getElementById('loggedInLabel').innerText = savedLabel || savedMember;
+        document.getElementById('loginView').classList.add('d-none');
+        document.getElementById('dashboardView').classList.remove('d-none');
+        loadDashboardData();
+      }
+    });
 
     function getTodayLocalDate() {
       const today = new Date();
@@ -459,49 +477,55 @@ function callAPI(action, payload = {}) {
 
     // Login Handler
     async function handleLogin(e) {
-      e.preventDefault();
-      const userVal = document.getElementById('loginUsername').value;
-      const passVal = document.getElementById('loginPassword').value;
-      const btn = document.getElementById('btnLogin');
-      const text = document.getElementById('btnLoginText');
-      const spinner = document.getElementById('btnLoginSpinner');
-      const alertBox = document.getElementById('loginAlert');
+      if (e) e.preventDefault();
 
-      alertBox.classList.add('d-none');
-      btn.disabled = true;
-      text.innerText = 'Memeriksa...';
-      spinner.classList.remove('d-none');
+      const usernameInput = document.getElementById("username");
+      const passwordInput = document.getElementById("password");
+      const loginBtn = document.getElementById("loginBtn");
+      const btnText = document.getElementById("btnLoginText");
+      const btnSpinner = document.getElementById("btnLoginSpinner");
+
+      const username = usernameInput ? usernameInput.value.trim() : "";
+      const password = passwordInput ? passwordInput.value.trim() : "";
+
+      if (!username || !password) {
+        alert("Username dan password harus diisi!");
+        return;
+      }
 
       try {
-        let res = await callAPI('login', { username: userVal, password: passVal });
-        processLoginResult(res, btn, text, spinner, alertBox);
+        if (loginBtn) {
+          loginBtn.disabled = true;
+          if (btnText) btnText.innerText = "Memproses...";
+          if (btnSpinner) btnSpinner.classList.remove("d-none");
+        }
+
+        const res = await callAPI("login", { username: username, password: password });
+
+        if (res.ok) {
+          sessionToken = res.token;
+          activeMember = res.member;
+
+          localStorage.setItem("sessionToken", res.token);
+          localStorage.setItem("userMember", res.member);
+          localStorage.setItem("userLabel", res.label);
+
+          document.getElementById('loggedInLabel').innerText = res.label || res.member;
+          document.getElementById('loginView').classList.add('d-none');
+          document.getElementById('dashboardView').classList.remove('d-none');
+
+          await loadDashboardData();
+        } else {
+          alert(res.message || "Login gagal. Cek username/password.");
+        }
       } catch (err) {
-        btn.disabled = false;
-        text.innerText = 'Masuk';
-        spinner.classList.add('d-none');
-        alertBox.innerText = err.message;
-        alertBox.classList.remove('d-none');
-      }
-    }
-
-    function processLoginResult(res, btn, text, spinner, alertBox) {
-      btn.disabled = false;
-      text.innerText = 'Masuk';
-      spinner.classList.add('d-none');
-
-      if (res && res.ok) {
-        sessionToken = res.token;
-        activeMember = res.member;
-        document.getElementById('loggedInLabel').innerText = res.label || res.member;
-        
-        document.getElementById('loginView').classList.add('d-none');
-        document.getElementById('dashboardView').classList.remove('d-none');
-        document.getElementById('formLogin').reset();
-        
-        loadDashboardData();
-      } else {
-        alertBox.innerText = (res && res.message) ? res.message : 'Username atau sandi salah.';
-        alertBox.classList.remove('d-none');
+        alert("Error: " + err.message);
+      } finally {
+        if (loginBtn) {
+          loginBtn.disabled = false;
+          if (btnText) btnText.innerText = "Masuk";
+          if (btnSpinner) btnSpinner.classList.add("d-none");
+        }
       }
     }
 
@@ -819,6 +843,7 @@ function callAPI(action, payload = {}) {
       text.innerText = 'Menyimpan...';
       spinner.classList.remove('d-none');
 
+      // Mengirimkan payload langsung agar terbaca oleh Code.gs
       const txPayload = {
         amount: document.getElementById('amount').value,
         category: document.getElementById('category').value,
@@ -828,7 +853,15 @@ function callAPI(action, payload = {}) {
       };
 
       try {
-        const res = await callAPI('addTransaction', { token: sessionToken, transaction: txPayload });
+        const res = await callAPI('addTransaction', { 
+          token: sessionToken, 
+          amount: txPayload.amount,
+          category: txPayload.category,
+          date: txPayload.date,
+          member: txPayload.member,
+          note: txPayload.note
+        });
+        
         btn.disabled = false;
         text.innerText = 'Simpan';
         spinner.classList.add('d-none');
@@ -869,6 +902,7 @@ function callAPI(action, payload = {}) {
         callAPI('logout', { token: sessionToken }).catch(() => {});
       }
       sessionToken = "";
+      localStorage.clear();
       document.getElementById('dashboardView').classList.add('d-none');
       document.getElementById('loginView').classList.remove('d-none');
     }
