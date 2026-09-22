@@ -914,6 +914,51 @@
       document.getElementById('dashboardView').classList.add('d-none');
       document.getElementById('loginView').classList.remove('d-none');
     }
+    let isAutoRefreshActive = true;
+
+async function startFastPolling() {
+  // Hanya jalankan jika user sudah login
+  if (typeof sessionToken !== 'undefined' && sessionToken) {
+    try {
+      // Ambil data diam-diam tanpa spinner loading
+      await loadDashboardData(true);
+    } catch (err) {
+      console.log("Auto refresh error:", err);
+    }
+  }
+
+  // Setelah selesai fetch, tunggu 3 detik baru jalankan lagi
+  if (isAutoRefreshActive) {
+    setTimeout(startFastPolling, 3000); // 3000 ms = 3 detik
+  }
+}
+
+// Jalankan polling
+startFastPolling();
+    async function loadDashboardData(isBackground = false) {
+  // Jika BUKAN pemanggilan background, tampilkan spinner loading
+  if (!isBackground) {
+    showLoading(true); 
+  }
+
+  try {
+    const res = await callAPI('getDashboard', { token: sessionToken });
+    
+    if (res.ok) {
+      // Perbarui tampilan tabel transaksi & ringkasan/grafik
+      renderTransactions(res.data.transactions);
+      renderSummary(res.data.summary);
+    }
+  } catch (error) {
+    if (!isBackground) {
+      alert("Gagal memuat data: " + error.message);
+    }
+  } finally {
+    if (!isBackground) {
+      showLoading(false);
+    }
+  }
+}
   </script>
 </body>
 </html>
