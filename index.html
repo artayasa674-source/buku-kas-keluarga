@@ -387,22 +387,16 @@
     const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LiV7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
 
     // Helper untuk memanggil API backend Apps Script
-   // Helper untuk memanggil API backend Apps Script
 async function callAPI(action, payload = {}) {
   try {
-    // Menggunakan URLSearchParams agar aman dari CORS di Apps Script
+    // Kirim sebagai form data agar Google Apps Script tidak memicu CORS error
+    const bodyData = new URLSearchParams();
+    bodyData.append("requestData", JSON.stringify({ action: action, ...payload }));
+
     const response = await fetch(API_URL, {
       method: "POST",
-      headers: { 
-        "Content-Type": "text/plain;charset=utf-8" 
-      },
-      body: JSON.stringify({ action: action, ...payload }),
-      redirect: "follow" // Memastikan browser mengikuti redirect Apps Script
+      body: bodyData
     });
-
-    if (!response.ok) {
-      throw new Error("Gagal terhubung ke server (HTTP " + response.status + ")");
-    }
 
     const result = await response.json();
     if (!result.ok) {
@@ -410,13 +404,9 @@ async function callAPI(action, payload = {}) {
     }
     return result;
   } catch (err) {
-    if (err.message === "Failed to fetch") {
-      throw new Error("Tidak dapat terhubung ke Apps Script. Pastikan Web App sudah di-deploy dengan akses 'Anyone'.");
-    }
-    throw err;
+    throw new Error("Gagal terhubung: " + err.message);
   }
 }
-
     let sessionToken = "";
     let activeMember = "";
     let rawTransactions = [];
