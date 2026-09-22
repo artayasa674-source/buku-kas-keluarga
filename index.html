@@ -380,68 +380,13 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   
   <script>
-    // 1. Masukkan URL Deploy Web App Apps Script di sini (Bukan URL Google Sheets)
-    <script>
-  // 1. Masukkan URL Deploy Web App Apps Script di sini (Bukan URL Google Sheets)
-  const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LiV7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
+    // URL Web App Apps Script
+    const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LiV7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
 
-  // Helper untuk memanggil API backend Apps Script via HTTP POST
-  async function callAPI(action, payload = {}) {
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: action, ...payload })
-      });
-      const result = await response.json();
-      if (!result.ok) {
-        throw new Error(result.message || "Terjadi kesalahan pada server.");
-      }
-      return result; // Mengembalikan full result (termasuk initialData jika ada)
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  // 2. TAMBAHAN: Muat data dari cache HP saat halaman pertama kali dibuka
-  document.addEventListener("DOMContentLoaded", () => {
-    const cachedData = localStorage.getItem("bukuKasData");
-    if (cachedData) {
-      renderUI(JSON.parse(cachedData)); // Tampilkan instan tanpa tunggu loading
-    }
-  });
-
-  // 3. TAMBAHAN: Fungsi Login yang menyimpan data ke cache
-  async function handleLogin(username, password) {
-    try {
-      const result = await callAPI("login", { username: username, password: password });
-      
-      if (result.ok) {
-        // Simpan data dari server ke cache lokal HP
-        if (result.initialData) {
-          localStorage.setItem("bukuKasData", JSON.stringify(result.initialData));
-          renderUI(result.initialData);
-        }
-        alert("Login berhasil!");
-      }
-    } catch (err) {
-      alert("Gagal login: " + err.message);
-    }
-  }
-
-  // 4. TAMBAHAN: Fungsi untuk memperbarui tampilan UI
-  function renderUI(data) {
-    // Sesuaikan ID elemen HTML dengan ID di file kamu
-    const totalElem = document.getElementById("total-pengeluaran");
-    if (totalElem && data.total !== undefined) {
-      totalElem.innerText = "Rp" + Number(data.total).toLocaleString("id-ID");
-    }
-  } 
-
-    // Helper untuk memanggil API backend Apps Script via HTTP POST
+    // Helper untuk memanggil API backend Apps Script
     async function callAPI(action, payload = {}) {
       try {
         const response = await fetch(API_URL, {
@@ -453,7 +398,7 @@
         if (!result.ok) {
           throw new Error(result.message || "Terjadi kesalahan pada server.");
         }
-        return result.data;
+        return result;
       } catch (err) {
         throw err;
       }
@@ -492,7 +437,7 @@
       return `${dateFormatted}, ${timeFormatted}`;
     }
 
-    // Login
+    // Login Handler
     async function handleLogin(e) {
       e.preventDefault();
       const userVal = document.getElementById('loginUsername').value;
@@ -508,30 +453,13 @@
       spinner.classList.remove('d-none');
 
       try {
-        // Pemanggilan via Apps Script Environment / Web App Fetch
-        let res;
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run
-            .withSuccessHandler(function(response) {
-              processLoginResult(response, btn, text, spinner, alertBox);
-            })
-            .withFailureHandler(function(err) {
-              btn.disabled = false;
-              text.innerText = 'Masuk';
-              spinner.classList.add('d-none');
-              alertBox.innerText = 'Terjadi kesalahan sistem: ' + err.message;
-              alertBox.classList.remove('d-none');
-            })
-            .login(userVal, passVal);
-        } else {
-          res = await callAPI('login', { username: userVal, password: passVal });
-          processLoginResult({ ok: true, ...res }, btn, text, spinner, alertBox);
-        }
+        let res = await callAPI('login', { username: userVal, password: passVal });
+        processLoginResult(res, btn, text, spinner, alertBox);
       } catch (err) {
         btn.disabled = false;
         text.innerText = 'Masuk';
         spinner.classList.add('d-none');
-        alertBox.innerText = 'Terjadi kesalahan sistem: ' + err.message;
+        alertBox.innerText = err.message;
         alertBox.classList.remove('d-none');
       }
     }
@@ -560,15 +488,9 @@
     // Load Data
     async function loadDashboardData() {
       try {
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run
-            .withSuccessHandler(function(data) {
-              handleDashboardData(data);
-            })
-            .getData(sessionToken);
-        } else {
-          const data = await callAPI('getData', { token: sessionToken });
-          handleDashboardData(data);
+        const res = await callAPI('getData', { token: sessionToken });
+        if (res.ok && res.data) {
+          handleDashboardData(res.data);
         }
       } catch (err) {
         showToast('Gagal memuat data: ' + err.message);
@@ -653,7 +575,6 @@
 
       renderChart(catMap, grandTotal);
 
-      // Breakdown Kategori
       const catContainer = document.getElementById('categoryBreakdownContainer');
       catContainer.innerHTML = '';
       if (Object.keys(catMap).length === 0) {
@@ -677,7 +598,6 @@
         });
       }
 
-      // Breakdown Anggota
       const memContainer = document.getElementById('memberBreakdownContainer');
       memContainer.innerHTML = '';
       if (Object.keys(memberMap).length === 0) {
@@ -700,7 +620,6 @@
         });
       }
 
-      // Pengurutan Riwayat Transaksi
       const sortedTx = [...filtered].sort((a, b) => {
         const timeA = new Date(a.date).getTime();
         const timeB = new Date(b.date).getTime();
@@ -716,7 +635,6 @@
       });
 
       const top5Tx = sortedTx.slice(0, 5);
-
       const listContainer = document.getElementById('transactionList');
       listContainer.innerHTML = '';
 
@@ -815,21 +733,9 @@
       if (modal) modal.hide();
 
       try {
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run
-            .withSuccessHandler(function(res) {
-              showToast(res.message || 'Pengeluaran berhasil dihapus.');
-              loadDashboardData();
-            })
-            .withFailureHandler(function(err) {
-              showToast('Gagal: ' + err.message);
-            })
-            .deleteTransaction(sessionToken, selectedTxToDelete);
-        } else {
-          const res = await callAPI('deleteTransaction', { token: sessionToken, id: selectedTxToDelete });
-          showToast(res.message || 'Pengeluaran berhasil dihapus.');
-          loadDashboardData();
-        }
+        const res = await callAPI('deleteTransaction', { token: sessionToken, id: selectedTxToDelete });
+        showToast(res.message || 'Pengeluaran berhasil dihapus.');
+        loadDashboardData();
       } catch (err) {
         showToast('Gagal: ' + err.message);
       }
@@ -902,38 +808,14 @@
       };
 
       try {
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run
-            .withSuccessHandler(function(id) {
-              btn.disabled = false;
-              text.innerText = 'Simpan';
-              spinner.classList.add('d-none');
+        const res = await callAPI('addTransaction', { token: sessionToken, transaction: txPayload });
+        btn.disabled = false;
+        text.innerText = 'Simpan';
+        spinner.classList.add('d-none');
 
-              if (id) {
-                showToast('Transaksi berhasil disimpan!');
-                resetForm();
-                loadDashboardData();
-              } else {
-                alert('Gagal menyimpan transaksi.');
-              }
-            })
-            .withFailureHandler(function(err) {
-              btn.disabled = false;
-              text.innerText = 'Simpan';
-              spinner.classList.add('d-none');
-              alert('Error: ' + err.message);
-            })
-            .addTransaction(sessionToken, txPayload);
-        } else {
-          const res = await callAPI('addTransaction', { token: sessionToken, transaction: txPayload });
-          btn.disabled = false;
-          text.innerText = 'Simpan';
-          spinner.classList.add('d-none');
-
-          showToast('Transaksi berhasil disimpan!');
-          resetForm();
-          loadDashboardData();
-        }
+        showToast('Transaksi berhasil disimpan!');
+        closeFormModal();
+        loadDashboardData();
       } catch (err) {
         btn.disabled = false;
         text.innerText = 'Simpan';
@@ -964,11 +846,7 @@
 
     function handleLogout() {
       if (sessionToken) {
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run.logout(sessionToken);
-        } else {
-          callAPI('logout', { token: sessionToken }).catch(() => {});
-        }
+        callAPI('logout', { token: sessionToken }).catch(() => {});
       }
       sessionToken = "";
       document.getElementById('dashboardView').classList.add('d-none');
