@@ -433,6 +433,7 @@
     let currentDate = new Date();
     let chartInstance = null;
     let selectedTxToDelete = null;
+    let isAutoRefreshActive = true;
 
     const monthShortNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
     const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -454,6 +455,7 @@
         document.getElementById('loginView').classList.add('d-none');
         document.getElementById('dashboardView').classList.remove('d-none');
         loadDashboardData();
+        startFastPolling();
       }
     });
 
@@ -476,6 +478,15 @@
       const timeFormatted = timeStr ? timeStr.replace(':', '.') : getCurrentTimeString();
 
       return `${dateFormatted}, ${timeFormatted}`;
+    }
+
+    // Fungsi Indikator Loading
+    function showLoading(show) {
+      const spinner = document.getElementById("btnLoginSpinner");
+      if (spinner) {
+        if (show) spinner.classList.remove("d-none");
+        else spinner.classList.add("d-none");
+      }
     }
 
     // Login Handler
@@ -518,6 +529,7 @@
           document.getElementById('dashboardView').classList.remove('d-none');
 
           await loadDashboardData();
+          startFastPolling();
         } else {
           alert(res.message || "Login gagal. Cek username/password.");
         }
@@ -533,14 +545,24 @@
     }
 
     // Load Data
-    async function loadDashboardData() {
+    async function loadDashboardData(isBackground = false) {
+      if (!isBackground) {
+        showLoading(true);
+      }
+
       try {
         const res = await callAPI('getData', { token: sessionToken });
         if (res.ok && res.data) {
           handleDashboardData(res.data);
         }
       } catch (err) {
-        showToast('Gagal memuat data: ' + err.message);
+        if (!isBackground) {
+          showToast('Gagal memuat data: ' + err.message);
+        }
+      } finally {
+        if (!isBackground) {
+          showLoading(false);
+        }
       }
     }
 
@@ -837,54 +859,52 @@
     }
 
     async function handleTransactionSubmit(e) {
-  e.preventDefault();
-  const btn = document.getElementById('btnSimpan');
-  const text = document.getElementById('btnText');
-  const spinner = document.getElementById('btnSpinner');
+      e.preventDefault();
+      const btn = document.getElementById('btnSimpan');
+      const text = document.getElementById('btnText');
+      const spinner = document.getElementById('btnSpinner');
 
-  btn.disabled = true;
-  text.innerText = 'Menyimpan...';
-  spinner.classList.remove('d-none');
+      btn.disabled = true;
+      text.innerText = 'Menyimpan...';
+      spinner.classList.remove('d-none');
 
-  // Mengambil nilai dari form
-  const amountVal = document.getElementById('amount').value;
-  const categoryVal = document.getElementById('category').value;
-  const dateVal = document.getElementById('date').value;
-  const noteVal = document.getElementById('note').value;
+      const amountVal = document.getElementById('amount').value;
+      const categoryVal = document.getElementById('category').value;
+      const dateVal = document.getElementById('date').value;
+      const noteVal = document.getElementById('note').value;
 
-  try {
-    // Mengirim payload dengan struktur 'amount' langsung dan versi bersarang 'transaction'
-    // agar kompatibel dengan cara baca Code.gs yang berbeda
-    const res = await callAPI('addTransaction', { 
-      token: sessionToken,
-      amount: amountVal,
-      category: categoryVal,
-      date: dateVal,
-      member: activeMember,
-      note: noteVal,
-      transaction: {
-        amount: amountVal,
-        category: categoryVal,
-        date: dateVal,
-        member: activeMember,
-        note: noteVal
+      try {
+        const res = await callAPI('addTransaction', { 
+          token: sessionToken,
+          amount: amountVal,
+          category: categoryVal,
+          date: dateVal,
+          member: activeMember,
+          note: noteVal,
+          transaction: {
+            amount: amountVal,
+            category: categoryVal,
+            date: dateVal,
+            member: activeMember,
+            note: noteVal
+          }
+        });
+        
+        btn.disabled = false;
+        text.innerText = 'Simpan';
+        spinner.classList.add('d-none');
+
+        showToast('Transaksi berhasil disimpan!');
+        closeFormModal();
+        loadDashboardData();
+      } catch (err) {
+        btn.disabled = false;
+        text.innerText = 'Simpan';
+        spinner.classList.add('d-none');
+        alert('Error: ' + err.message);
       }
-    });
-    
-    btn.disabled = false;
-    text.innerText = 'Simpan';
-    spinner.classList.add('d-none');
+    }
 
-    showToast('Transaksi berhasil disimpan!');
-    closeFormModal();
-    loadDashboardData();
-  } catch (err) {
-    btn.disabled = false;
-    text.innerText = 'Simpan';
-    spinner.classList.add('d-none');
-    alert('Error: ' + err.message);
-  }
-}
     function resetForm() {
       document.getElementById('formPengeluaran').reset();
       document.getElementById('amount').value = '';
@@ -910,55 +930,40 @@
         callAPI('logout', { token: sessionToken }).catch(() => {});
       }
       sessionToken = "";
+      isAutoRefreshActive = false;
       localStorage.clear();
       document.getElementById('dashboardView').classList.add('d-none');
       document.getElementById('loginView').classList.remove('d-none');
     }
-    let isAutoRefreshActive = true;
 
-async function startFastPolling() {
-  // Hanya jalankan jika user sudah login
-  if (typeof sessionToken !== 'undefined' && sessionToken) {
-    try {
-      // Ambil data diam-diam tanpa spinner loading
-      await loadDashboardData(true);
-    } catch (err) {
-      console.log("Auto refresh error:", err);
-    }
-  }
+    // =========================================================
+    // FAST POLLING & SINKRONISASI OTOMATIS (JEDA 3 DETIK)
+    // =========================================================
+    async function startFastPolling() {
+      if (typeof sessionToken !== 'undefined' && sessionToken) {
+        try {
+          await loadDashboardData(true);
+        } catch (err) {
+          console.log("Auto refresh error:", err);
+        }
+      }
 
-  // Setelah selesai fetch, tunggu 3 detik baru jalankan lagi
-  if (isAutoRefreshActive) {
-    setTimeout(startFastPolling, 3000); // 3000 ms = 3 detik
-  }
-}
+      if (isAutoRefreshActive) {
+        setTimeout(startFastPolling, 3000); // 3000 ms = 3 detik
+      }
+    }
 
-// Jalankan polling
-startFastPolling();
-    async function loadDashboardData(isBackground = false) {
-  // Jika BUKAN pemanggilan background, tampilkan spinner loading
-  if (!isBackground) {
-    showLoading(true); 
-  }
-
-  try {
-    const res = await callAPI('getDashboard', { token: sessionToken });
-    
-    if (res.ok) {
-      // Perbarui tampilan tabel transaksi & ringkasan/grafik
-      renderTransactions(res.data.transactions);
-      renderSummary(res.data.summary);
-    }
-  } catch (error) {
-    if (!isBackground) {
-      alert("Gagal memuat data: " + error.message);
-    }
-  } finally {
-    if (!isBackground) {
-      showLoading(false);
-    }
-  }
-}
+    // Otomatis menonaktifkan polling saat tab/layar HP tidak aktif
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        isAutoRefreshActive = false;
+      } else {
+        if (!isAutoRefreshActive && sessionToken) {
+          isAutoRefreshActive = true;
+          startFastPolling();
+        }
+      }
+    });
   </script>
 </body>
 </html>
