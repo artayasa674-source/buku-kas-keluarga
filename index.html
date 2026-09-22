@@ -384,7 +384,62 @@
   
   <script>
     // 1. Masukkan URL Deploy Web App Apps Script di sini (Bukan URL Google Sheets)
-    const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LIv7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec"; 
+    <script>
+  // 1. Masukkan URL Deploy Web App Apps Script di sini (Bukan URL Google Sheets)
+  const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LiV7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
+
+  // Helper untuk memanggil API backend Apps Script via HTTP POST
+  async function callAPI(action, payload = {}) {
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: action, ...payload })
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.message || "Terjadi kesalahan pada server.");
+      }
+      return result; // Mengembalikan full result (termasuk initialData jika ada)
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  // 2. TAMBAHAN: Muat data dari cache HP saat halaman pertama kali dibuka
+  document.addEventListener("DOMContentLoaded", () => {
+    const cachedData = localStorage.getItem("bukuKasData");
+    if (cachedData) {
+      renderUI(JSON.parse(cachedData)); // Tampilkan instan tanpa tunggu loading
+    }
+  });
+
+  // 3. TAMBAHAN: Fungsi Login yang menyimpan data ke cache
+  async function handleLogin(username, password) {
+    try {
+      const result = await callAPI("login", { username: username, password: password });
+      
+      if (result.ok) {
+        // Simpan data dari server ke cache lokal HP
+        if (result.initialData) {
+          localStorage.setItem("bukuKasData", JSON.stringify(result.initialData));
+          renderUI(result.initialData);
+        }
+        alert("Login berhasil!");
+      }
+    } catch (err) {
+      alert("Gagal login: " + err.message);
+    }
+  }
+
+  // 4. TAMBAHAN: Fungsi untuk memperbarui tampilan UI
+  function renderUI(data) {
+    // Sesuaikan ID elemen HTML dengan ID di file kamu
+    const totalElem = document.getElementById("total-pengeluaran");
+    if (totalElem && data.total !== undefined) {
+      totalElem.innerText = "Rp" + Number(data.total).toLocaleString("id-ID");
+    }
+  } 
 
     // Helper untuk memanggil API backend Apps Script via HTTP POST
     async function callAPI(action, payload = {}) {
