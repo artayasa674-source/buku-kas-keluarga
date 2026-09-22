@@ -386,26 +386,43 @@
     // URL Web App Apps Script
     const API_URL = "https://script.google.com/macros/s/AKfycbxApUNsyjZuYfH3KGS7LiV7xp1pNcVgLFpHQtxYxNOu3aiH3Zit_p81ZG2sIbGCecmXSA/exec";
 
-    // Helper untuk memanggil API backend Apps Script
-async function callAPI(action, payload = {}) {
-  try {
-    // Kirim sebagai form data agar Google Apps Script tidak memicu CORS error
-    const bodyData = new URLSearchParams();
-    bodyData.append("requestData", JSON.stringify({ action: action, ...payload }));
+// Memanggil API Apps Script via JSONP (Bypass CORS & Responsif)
+function callAPI(action, payload = {}) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const script = document.createElement('script');
 
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: bodyData
-    });
+    // Timeout 15 detik jika jaringan lambat
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Koneksi RTO/Lambat. Periksa koneksi internet Anda."));
+    }, 15000);
 
-    const result = await response.json();
-    if (!result.ok) {
-      throw new Error(result.message || "Terjadi kesalahan pada server.");
+    function cleanup() {
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      delete window[callbackName];
     }
-    return result;
-  } catch (err) {
-    throw new Error("Gagal terhubung: " + err.message);
-  }
+
+    window[callbackName] = function(response) {
+      cleanup();
+      if (response && response.ok) {
+        resolve(response);
+      } else {
+        reject(new Error(response ? response.message : "Gagal memproses permintaan."));
+      }
+    };
+
+    const requestData = encodeURIComponent(JSON.stringify({ action: action, ...payload }));
+    script.src = `${API_URL}?callback=${callbackName}&requestData=${requestData}`;
+    
+    script.onerror = function() {
+      cleanup();
+      reject(new Error("Gagal terhubung ke Google Apps Script. Silakan coba lagi."));
+    };
+
+    document.body.appendChild(script);
+  });
 }
     let sessionToken = "";
     let activeMember = "";
