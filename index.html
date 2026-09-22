@@ -440,10 +440,8 @@
 
     // Inisialisasi Aplikasi Saat Halaman Dibuka
     document.addEventListener("DOMContentLoaded", function() {
-      // Set label bulan saat ini
       document.getElementById('currentMonthLabel').innerText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
-      // Cek apakah ada sesi login tersimpan
       const savedToken = localStorage.getItem("sessionToken");
       const savedMember = localStorage.getItem("userMember");
       const savedLabel = localStorage.getItem("userLabel");
@@ -480,7 +478,6 @@
       return `${dateFormatted}, ${timeFormatted}`;
     }
 
-    // Fungsi Indikator Loading
     function showLoading(show) {
       const spinner = document.getElementById("btnLoginSpinner");
       if (spinner) {
@@ -742,7 +739,7 @@
       }
     }
 
-    // Chart Donut
+    // Chart Donut (Animasi Dimatikan)
     function renderChart(catMap, grandTotal) {
       const ctx = document.getElementById('expenseChart').getContext('2d');
       const wrapper = document.getElementById('chartWrapper');
@@ -781,6 +778,7 @@
         },
         options: {
           responsive: true,
+          animation: false, // Animasi dimatikan di sini
           plugins: { legend: { display: false } },
           cutout: '70%'
         }
@@ -936,9 +934,7 @@
       document.getElementById('loginView').classList.remove('d-none');
     }
 
-    // =========================================================
-    // FAST POLLING & SINKRONISASI OTOMATIS (JEDA 3 DETIK)
-    // =========================================================
+    // Fast Polling Jeda 3 Detik
     async function startFastPolling() {
       if (typeof sessionToken !== 'undefined' && sessionToken) {
         try {
@@ -949,11 +945,10 @@
       }
 
       if (isAutoRefreshActive) {
-        setTimeout(startFastPolling, 3000); // 3000 ms = 3 detik
+        setTimeout(startFastPolling, 3000);
       }
     }
 
-    // Otomatis menonaktifkan polling saat tab/layar HP tidak aktif
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
         isAutoRefreshActive = false;
