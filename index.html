@@ -4,8 +4,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base target="_top">
   <!-- Ikon untuk Android, iOS (Apple), dan Browser -->
-<link rel="icon" type="image/png" sizes="192x192" href="https://drive.google.com/file/d/1xv0KlZVDtGMZQ4NUnNPWfHTyA4YXuLqo/view?usp=drive_link">
-<link rel="apple-touch-icon" sizes="180x180" href="https://drive.google.com/file/d/1xv0KlZVDtGMZQ4NUnNPWfHTyA4YXuLqo/view?usp=drive_link">
+  <link rel="icon" type="image/png" sizes="192x192" href="https://drive.google.com/file/d/1xv0KlZVDtGMZQ4NUnNPWfHTyA4YXuLqo/view?usp=drive_link">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://drive.google.com/file/d/1xv0KlZVDtGMZQ4NUnNPWfHTyA4YXuLqo/view?usp=drive_link">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -67,14 +67,14 @@
       width: 100%;
       background: #fff;
       font-size: 0.9rem;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     .filter-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       gap: 10px;
     }
     .member-chips { display: flex; gap: 8px; }
@@ -100,6 +100,46 @@
       font-size: 0.85rem;
       color: #444;
       background: #fff;
+    }
+
+    /* Style Filter Tanggal Harian */
+    .date-filter-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      background: #fff;
+      padding: 8px 14px;
+      border-radius: 14px;
+      border: 1px solid #e5e5e5;
+    }
+    .date-filter-box label {
+      font-size: 0.82rem;
+      color: var(--text-sub);
+      white-space: nowrap;
+      font-weight: 500;
+    }
+    .date-input-custom {
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 0.88rem;
+      color: #333;
+      font-weight: 600;
+      width: 100%;
+    }
+    .btn-clear-date {
+      border: none;
+      background: #f0f0f0;
+      color: #666;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      cursor: pointer;
     }
 
     .dashboard-card {
@@ -312,9 +352,19 @@
         </select>
       </div>
 
+      <!-- Filter Tanggal Harian (Date Picker) -->
+      <div class="date-filter-box">
+        <i class="bi bi-calendar-event text-secondary"></i>
+        <label for="filterDate">Filter Tanggal:</label>
+        <input type="date" class="date-input-custom" id="filterDate" onchange="onDateFilterChange()">
+        <button type="button" class="btn-clear-date d-none" id="btnClearDate" title="Bersihkan Filter Tanggal" onclick="clearDateFilter()">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+
       <!-- Card Ringkasan Utama -->
       <div class="dashboard-card">
-        <div class="card-label">Total pengeluaran</div>
+        <div class="card-label" id="totalLabel">Total pengeluaran (Bulan Ini)</div>
         <div class="card-total" id="totalDisplay">Rp0</div>
 
         <div class="chart-box" id="chartWrapper">
@@ -328,9 +378,9 @@
         <div id="memberBreakdownContainer"></div>
       </div>
 
-      <!-- Riwayat Transaksi Jurnal (Max 5) -->
+      <!-- Riwayat Transaksi Jurnal -->
       <div class="tx-section-header">
-        <div class="tx-section-label">5 Pengeluaran Terbaru</div>
+        <div class="tx-section-label" id="txSectionTitle">5 Pengeluaran Terbaru</div>
       </div>
       <div id="transactionList"></div>
     </div>
@@ -440,10 +490,8 @@
 
     // Inisialisasi Aplikasi Saat Halaman Dibuka
     document.addEventListener("DOMContentLoaded", function() {
-      // Set label bulan saat ini
       document.getElementById('currentMonthLabel').innerText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
-      // Cek apakah ada sesi login tersimpan
       const savedToken = localStorage.getItem("sessionToken");
       const savedMember = localStorage.getItem("userMember");
       const savedLabel = localStorage.getItem("userLabel");
@@ -480,7 +528,6 @@
       return `${dateFormatted}, ${timeFormatted}`;
     }
 
-    // Fungsi Indikator Loading
     function showLoading(show) {
       const spinner = document.getElementById("btnLoginSpinner");
       if (spinner) {
@@ -587,7 +634,34 @@
     function changeMonth(offset) {
       currentDate.setMonth(currentDate.getMonth() + offset);
       document.getElementById('currentMonthLabel').innerText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+      // Kosongkan filter tanggal saat berpindah bulan
+      clearDateFilter(false);
       renderDashboard();
+    }
+
+    function onDateFilterChange() {
+      const selectedDate = document.getElementById('filterDate').value;
+      const clearBtn = document.getElementById('btnClearDate');
+      
+      if (selectedDate) {
+        clearBtn.classList.remove('d-none');
+        // Otomatis sinkronkan navigator bulan sesuai tanggal yang dipilih
+        const d = new Date(selectedDate);
+        if (!isNaN(d.getTime())) {
+          currentDate = d;
+          document.getElementById('currentMonthLabel').innerText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+        }
+      } else {
+        clearBtn.classList.add('d-none');
+      }
+      
+      renderDashboard();
+    }
+
+    function clearDateFilter(triggerRender = true) {
+      document.getElementById('filterDate').value = '';
+      document.getElementById('btnClearDate').classList.add('d-none');
+      if (triggerRender) renderDashboard();
     }
 
     function timeToMinutes(timeStr) {
@@ -604,6 +678,7 @@
     function renderDashboard() {
       const searchVal = document.getElementById('searchInput').value.toLowerCase();
       const catFilter = document.getElementById('filterCategory').value;
+      const selectedDateFilter = document.getElementById('filterDate').value;
       
       const targetYear = currentDate.getFullYear();
       const targetMonth = currentDate.getMonth();
@@ -612,13 +687,32 @@
       let catMap = {};
       let memberMap = {};
 
+      // Ubah Label Card Total dan Judul Riwayat
+      if (selectedDateFilter) {
+        const d = new Date(selectedDateFilter);
+        const dateFormatted = !isNaN(d.getTime()) ? `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}` : selectedDateFilter;
+        document.getElementById('totalLabel').innerText = `Total pengeluaran (${dateFormatted})`;
+        document.getElementById('txSectionTitle').innerText = `Pengeluaran ${dateFormatted}`;
+      } else {
+        document.getElementById('totalLabel').innerText = `Total pengeluaran (Bulan Ini)`;
+        document.getElementById('txSectionTitle').innerText = `5 Pengeluaran Terbaru`;
+      }
+
       const filtered = rawTransactions.filter((tx, idx) => {
         if (!tx.date) return false;
         
         const txDate = new Date(tx.date);
         if (isNaN(txDate.getTime())) return false;
 
-        if (txDate.getFullYear() !== targetYear || txDate.getMonth() !== targetMonth) return false;
+        // Jika filter tanggal spesifik aktif:
+        if (selectedDateFilter) {
+          const txDateStr = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}-${String(txDate.getDate()).padStart(2, '0')}`;
+          if (txDateStr !== selectedDateFilter) return false;
+        } else {
+          // Jika tidak pilih tanggal, filter berdasarkan bulan & tahun
+          if (txDate.getFullYear() !== targetYear || txDate.getMonth() !== targetMonth) return false;
+        }
+
         if (currentMemberFilter !== 'semua' && String(tx.member).toLowerCase() !== currentMemberFilter.toLowerCase()) return false;
         if (catFilter !== 'semua' && tx.category !== catFilter) return false;
         
@@ -647,7 +741,7 @@
       const catContainer = document.getElementById('categoryBreakdownContainer');
       catContainer.innerHTML = '';
       if (Object.keys(catMap).length === 0) {
-        catContainer.innerHTML = '<div class="empty-state">Belum ada pengeluaran di bulan ini.</div>';
+        catContainer.innerHTML = '<div class="empty-state">Belum ada pengeluaran di tanggal/periode ini.</div>';
       } else {
         Object.keys(catMap).forEach(cId => {
           const catObj = rawCategories.find(c => c.id === cId) || { label: cId, color: '#d88a51' };
@@ -703,14 +797,16 @@
         return b._originalIndex - a._originalIndex;
       });
 
-      const top5Tx = sortedTx.slice(0, 5);
+      // Jika filter tanggal spesifik aktif, tampilkan seluruh transaksi di hari itu. 
+      // Jika mode bulanan, tampilkan 5 terbaru.
+      const displayTxList = selectedDateFilter ? sortedTx : sortedTx.slice(0, 5);
       const listContainer = document.getElementById('transactionList');
       listContainer.innerHTML = '';
 
-      if (top5Tx.length === 0) {
+      if (displayTxList.length === 0) {
         listContainer.innerHTML = '<div class="empty-state">Tidak ada transaksi terdaftar.</div>';
       } else {
-        top5Tx.forEach(tx => {
+        displayTxList.forEach(tx => {
           const catObj = rawCategories.find(c => c.id === tx.category) || { label: tx.category, color: '#d88a51' };
           const mName = tx.member ? tx.member.charAt(0).toUpperCase() + tx.member.slice(1) : '';
           const dateTimeDisplay = formatTxDateTime(tx.date, tx.time);
@@ -742,7 +838,7 @@
       }
     }
 
-    // Chart Donut
+    // Chart Donut (Animasi Dimatikan)
     function renderChart(catMap, grandTotal) {
       const ctx = document.getElementById('expenseChart').getContext('2d');
       const wrapper = document.getElementById('chartWrapper');
@@ -781,6 +877,7 @@
         },
         options: {
           responsive: true,
+          animation: false,
           plugins: { legend: { display: false } },
           cutout: '70%'
         }
@@ -936,9 +1033,7 @@
       document.getElementById('loginView').classList.remove('d-none');
     }
 
-    // =========================================================
-    // FAST POLLING & SINKRONISASI OTOMATIS (JEDA 3 DETIK)
-    // =========================================================
+    // Fast Polling Jeda 3 Detik
     async function startFastPolling() {
       if (typeof sessionToken !== 'undefined' && sessionToken) {
         try {
@@ -949,11 +1044,10 @@
       }
 
       if (isAutoRefreshActive) {
-        setTimeout(startFastPolling, 15000); // 3000 ms = 3 detik, saya ubah ke 15 detik supaya tidak selalu ke reload
+        setTimeout(startFastPolling, 3000);
       }
     }
 
-    // Otomatis menonaktifkan polling saat tab/layar HP tidak aktif
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
         isAutoRefreshActive = false;
